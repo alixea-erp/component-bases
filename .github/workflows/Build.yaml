@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  push:
+
+env:
+  REGISTRY: public.ecr.aws
+  PROJECT: p8t2q7f4/alixea/${{ github.event.repository.name }}
+
+jobs:
+  test:
+    name: Test the scripts
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: alixea-pm (Node.js)
+        run: sh node/alixea-pm.test.sh
+      - name: alixea-pm (Python)
+        run: sh python/alixea-pm.test.sh
+
+  run-builds:
+    name: Build ${{ matrix.name }}
+    needs: test
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Node.js 26
+            identifier: node26
+            folder: node
+            type: main
+            buildArgs: NODE_VERSION=26
+          - name: Python
+            identifier: python
+            folder: python
+            type: main
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::300197899440:role/AlixeaPrebuildPushForGithubActions
+          aws-region: us-east-1
+      - name: Login to Amazon ECR Public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+      - name: Alixea build
+        uses: alixea-erp/action-build@v1.0
+        with: ${{ matrix }}
+        env:
+          project: ${{ env.PROJECT }}
+          registry: ${{ env.REGISTRY }}
